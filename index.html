@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Tredegar Park Greens</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="robots" content="noindex, nofollow">
@@ -82,6 +83,17 @@ label.btn.primary{background:var(--turf);color:var(--bg);border-color:var(--turf
 .pill{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:10px;background:var(--turf-soft);color:var(--turf)}
 .pill.warn{background:transparent;border:1px solid var(--flag);color:var(--ink)}
 #saveState{min-height:1.2em}
+#printBook{display:none}
+@media print{
+  @page{size:A4 portrait;margin:8mm}
+  :root{padding:0!important}
+  body{padding:0!important;background:#fff!important}
+  body>*:not(#printBook){display:none!important}
+  #printBook{display:block}
+  .ppage{break-after:page;page-break-after:always}
+  .ppage:last-child{break-after:auto;page-break-after:auto}
+  .ppage canvas{display:block;width:100%;height:auto}
+}
 </style>
 
 <div class="top">
@@ -138,6 +150,7 @@ label.btn.primary{background:var(--turf);color:var(--bg);border-color:var(--turf
         <input type="file" id="kmlFile" accept=".kml,application/vnd.google-earth.kml+xml,application/xml,text/xml" hidden>
         <button class="btn" id="applyPins" hidden>Use pin numbers as hole labels</button>
         <button class="btn" id="exportKml" hidden>Export my greens (KML)</button>
+        <button class="btn primary" id="printSat" hidden>Print green book with satellite</button>
       </div>
       <p class="note" id="pinNote"></p>
     </div>
@@ -180,6 +193,7 @@ label.btn.primary{background:var(--turf);color:var(--bg);border-color:var(--turf
   </section>
 </div>
 
+<div id="printBook" aria-hidden="true"></div>
 <p class="foot">Elevation: Welsh Government LiDAR 2020–22, 1&nbsp;m terrain model flown December 2020, via DataMapWales, smoothed over about 1&nbsp;m. Google satellite imagery sits about 1.5&nbsp;m north of the LiDAR here, so pins and shapes imported from Google My Maps are moved 1.5&nbsp;m south to line up. Course outline and bunkers © OpenStreetMap contributors. Small breaks under a metre won’t show, and a green rebuilt since 2020 won’t match. Greens were found automatically as flat raised pads; hole numbers are yours to set.</p>
 
 <script>
@@ -214,7 +228,7 @@ function init(data){
   if(local)labels=local;
   if(!HOSTED){ // own website: start from the saved snapshot, then this browser's changes on top
     fetch("labels.json").then(r=>r.ok?r.json():{}).then(snap=>{labels=Object.assign({},snap,labels);drawMap();buildHoles();if(current)renderDetail();}).catch(()=>{});
-    $("satbar").hidden=false; $("exportKml").hidden=false; satInit();
+    $("satbar").hidden=false; $("exportKml").hidden=false; $("printSat").hidden=false; satInit();
   }
   const lp=safeLS(()=>JSON.parse(localStorage.getItem("tpg-pins")||"null")); if(lp)setPins(lp);
   buildBase(); drawMap(); buildHoles(); buildLegend(); buildHoleSelect();
@@ -645,6 +659,153 @@ $("exportKml").onclick=()=>{
   });
   const kml=`<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Tredegar Park greens</name><Folder><name>Greens</name>${g}</Folder><Folder><name>Direction of play</name>${l}</Folder></Document></kml>`;
   const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([kml],{type:"application/vnd.google-earth.kml+xml"})); a.download="Tredegar Park greens.kml"; document.body.appendChild(a); a.click(); a.remove();
+};
+
+// ---------- printable green book with satellite (own website) ----------
+function tileP(z,x,y){const k=z+"/"+x+"/"+y;let im=tileCache.get(k);
+  if(!im){im=new Image();im.crossOrigin="anonymous";im.src=`https://tile.googleapis.com/v1/2dtiles/${z}/${x}/${y}?session=${satSession}&key=${encodeURIComponent(satKey)}`;tileCache.set(k,im);}
+  return im.complete?Promise.resolve(im):new Promise(r=>{im.addEventListener("load",()=>r(im),{once:true});im.addEventListener("error",()=>r(im),{once:true});});}
+// paint Google imagery for grid window [gx0,gx0+gw]x[gy0,gy0+gh] onto ctx area cw x ch, waiting for every tile
+async function satPaint(ctx,gx0,gy0,gw,gh,cw,ch,z){
+  const sh=C.gshift||[0,0], P=(x,y)=>{const ll=toLL(x-sh[0],y-sh[1]);return merc(ll[0],ll[1],z)};
+  const o=P(gx0,gy0),ax=P(gx0+gw,gy0),ay=P(gx0,gy0+gh),az=P(gx0+gw,gy0+gh);
+  const a11=(ax[0]-o[0])/cw,a21=(ax[1]-o[1])/cw,a12=(ay[0]-o[0])/ch,a22=(ay[1]-o[1])/ch,det=a11*a22-a12*a21,i11=a22/det,i12=-a12/det,i21=-a21/det,i22=a11/det;
+  const cs=[o,ax,ay,az],mx0=Math.min(...cs.map(c=>c[0])),mx1=Math.max(...cs.map(c=>c[0])),my0=Math.min(...cs.map(c=>c[1])),my1=Math.max(...cs.map(c=>c[1]));
+  const jobs=[]; for(let ty=Math.floor(my0/256);ty<=Math.floor(my1/256);ty++)for(let tx=Math.floor(mx0/256);tx<=Math.floor(mx1/256);tx++)jobs.push(tileP(z,tx,ty).then(im=>[tx,ty,im]));
+  const tiles=await Promise.all(jobs);
+  ctx.save(); ctx.fillStyle="#5d6b5a"; ctx.fillRect(0,0,cw,ch);
+  tiles.forEach(([tx,ty,im])=>{ if(!im.naturalWidth)return; const s=256/im.naturalWidth,ex=tx*256-o[0],ey=ty*256-o[1];
+    ctx.setTransform(i11*s,i21*s,i12*s,i22*s,i11*ex+i12*ey,i21*ex+i22*ey); ctx.drawImage(im,0,0); });
+  ctx.restore();
+}
+function playDir(v){const pl=v.play; if(!Array.isArray(pl)||pl.length<2)return null; let L=pl.slice();
+  while(L.length>2&&Math.hypot(L[L.length-1][0]-L[L.length-2][0],L[L.length-1][1]-L[L.length-2][1])<5)L.pop();
+  const a=L[0],b=L[L.length-1],n=Math.hypot(b[0]-a[0],b[1]-a[1])||1; return[(b[0]-a[0])/n,(b[1]-a[1])/n];}
+function greenStats(id,v){
+  const o=outlineOf(id), d=playDir(v)||[0,-1], eu=[-d[1],d[0]], ev=[-d[0],-d[1]];
+  const xs=o.map(p=>p[0]),ys=o.map(p=>p[1]); let n=0,sx=0,sy=0,zmin=1e9,zmax=-1e9,flat=0,steep=0,mx=[];
+  for(let y=Math.floor(Math.min(...ys));y<=Math.ceil(Math.max(...ys));y++)for(let x=Math.floor(Math.min(...xs));x<=Math.ceil(Math.max(...xs));x++){
+    if(!pip(o,x+.5,y+.5))continue; const i=y*W+x; n++; sx+=GX[i]; sy+=GY[i]; zmin=Math.min(zmin,Z[i]); zmax=Math.max(zmax,Z[i]);
+    const p=Math.hypot(GX[i],GY[i])*100; if(p<2)flat++; if(p>3)steep++; mx.push(p);}
+  mx.sort((a,b)=>a-b);
+  const dwx=-sx/n,dwy=-sy/n,tilt=Math.hypot(dwx,dwy)*100,du=dwx*eu[0]+dwy*eu[1],dv=dwx*ev[0]+dwy*ev[1],m=Math.hypot(du,dv)||1,parts=[];
+  if(playDir(v)){ if(Math.abs(dv)>=.35*m)parts.push(dv>0?"back to front":"front to back"); if(Math.abs(du)>=.35*m)parts.push(du<0?"right to left":"left to right"); }
+  const cx=xs.reduce((a,b)=>a+b)/xs.length, cy=ys.reduce((a,b)=>a+b)/ys.length;
+  const U=o.map(p=>(p[0]-cx)*eu[0]+(p[1]-cy)*eu[1]), V=o.map(p=>(p[0]-cx)*ev[0]+(p[1]-cy)*ev[1]);
+  return{area:n,tilt,fall:compass(dwx,dwy),rel:parts.join(" and "),rng:(zmax-zmin)*100,flat:flat/n*100,steep:steep/n*100,maxs:mx[Math.floor(mx.length*.98)]||0,
+    depth:Math.max(...V)-Math.min(...V),width:Math.max(...U)-Math.min(...U),cx,cy,d,hasPlay:!!playDir(v),
+    uc:(Math.max(...U)+Math.min(...U))/2,vc:(Math.max(...V)+Math.min(...V))/2,eu,ev};
+}
+// north-up composite of one green: imagery + slope colours + contours + arrows + outline
+async function greenComposite(id,cx,cy,D,ppm,withSat,alpha){
+  const N=Math.round(D*ppm), gx0=cx-D/2, gy0=cy-D/2, o=outlineOf(id);
+  const cv=document.createElement("canvas"); cv.width=cv.height=N; const ctx=cv.getContext("2d");
+  if(withSat) await satPaint(ctx,gx0,gy0,D,D,N,N,20);
+  else{ctx.fillStyle="#e9ede6";ctx.fillRect(0,0,N,N);ctx.globalAlpha=.55;ctx.drawImage(base,gx0,gy0,D,D,0,0,N,N);ctx.globalAlpha=1;}
+  const mk=document.createElement("canvas"); mk.width=mk.height=N; const mc=mk.getContext("2d");
+  mc.beginPath(); o.forEach((p,i)=>{const X=(p[0]-gx0)*ppm,Y=(p[1]-gy0)*ppm; i?mc.lineTo(X,Y):mc.moveTo(X,Y)}); mc.closePath(); mc.fillStyle="#000"; mc.fill();
+  const M=mc.getImageData(0,0,N,N).data;
+  const lay=document.createElement("canvas"); lay.width=lay.height=N; const lc=lay.getContext("2d"), img=lc.createImageData(N,N), dd=img.data;
+  const zs=new Float32Array(N*N), A=Math.round(alpha*255);
+  for(let py=0;py<N;py++)for(let px=0;px<N;px++){const gx=gx0+px/ppm,gy=gy0+py/ppm,i=py*N+px; zs[i]=bil(Z,gx,gy);
+    if(M[i*4+3]>127){const pct=Math.hypot(bil(GX,gx,gy),bil(GY,gx,gy))*100,k=SLOPE_BANDS.findIndex(s=>pct<s[0]),c=BAND_RGB[k<0?4:k];
+      dd[i*4]=c[0];dd[i*4+1]=c[1];dd[i*4+2]=c[2];dd[i*4+3]=A;}}
+  for(let py=0;py<N-1;py++)for(let px=0;px<N-1;px++){const i=py*N+px,a=Math.floor(zs[i]/.05);
+    if(a!==Math.floor(zs[i+1]/.05)||a!==Math.floor(zs[i+N]/.05)){const inside=M[i*4+3]>127,strong=Math.floor(zs[i]/.2)!==Math.floor(zs[i+1]/.2)||Math.floor(zs[i]/.2)!==Math.floor(zs[i+N]/.2);
+      if(inside){dd[i*4]=24;dd[i*4+1]=36;dd[i*4+2]=27;dd[i*4+3]=strong?235:150;} else if(!withSat){dd[i*4]=120;dd[i*4+1]=130;dd[i*4+2]=120;dd[i*4+3]=strong?110:60;}}}
+  lc.putImageData(img,0,0); ctx.drawImage(lay,0,0);
+  // arrows every 1.5 m inside
+  ctx.lineCap="round"; const st=1.5;
+  for(let gy=gy0+st/2;gy<gy0+D;gy+=st)for(let gx=gx0+st/2;gx<gx0+D;gx+=st){ if(!pip(o,gx,gy))continue;
+    const ux=-bil(GX,gx,gy),uy=-bil(GY,gx,gy),pct=Math.hypot(ux,uy)*100; if(pct<.2)continue;
+    const L=Math.min(1,.35+pct/6)*1.2*ppm,nx=ux/Math.hypot(ux,uy),ny=uy/Math.hypot(ux,uy),X=(gx-gx0)*ppm,Y=(gy-gy0)*ppm,ex=X+nx*L/2,ey=Y+ny*L/2,h=.32*ppm;
+    ctx.strokeStyle=ctx.fillStyle="#18241b"; ctx.lineWidth=Math.max(1.5,.07*ppm);
+    ctx.beginPath();ctx.moveTo(X-nx*L/2,Y-ny*L/2);ctx.lineTo(ex,ey);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex-nx*h-ny*h*.6,ey-ny*h+nx*h*.6);ctx.lineTo(ex-nx*h+ny*h*.6,ey-ny*h-nx*h*.6);ctx.closePath();ctx.fill();}
+  ctx.lineJoin="round";
+  for(const [w,c] of [[.38*ppm,"rgba(24,36,27,.9)"],[.18*ppm,"#ffffff"]]){ctx.strokeStyle=c;ctx.lineWidth=w;ctx.beginPath();o.forEach((p,i)=>{const X=(p[0]-gx0)*ppm,Y=(p[1]-gy0)*ppm;i?ctx.lineTo(X,Y):ctx.moveTo(X,Y)});ctx.closePath();ctx.stroke();}
+  return cv;
+}
+const PW=1240,PH=1754,PF='"Barlow Condensed","Arial Narrow",sans-serif',PB='Inter,system-ui,sans-serif';
+function newPage(){const c=document.createElement("canvas");c.width=PW;c.height=PH;const x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,PW,PH);x.textBaseline="alphabetic";return[c,x]}
+function txt(x,t,X,Y,font,col,align){x.font=font;x.fillStyle=col||"#18241b";x.textAlign=align||"left";x.fillText(t,X,Y)}
+function footer(x,lines){lines.forEach((t,i)=>txt(x,t,90,PH-40-(lines.length-1-i)*24,"400 17px "+PB,"#5b6b5e"))}
+async function greenPage(id,v,withSat,alpha){
+  const S=greenStats(id,v),[c,x]=newPage();
+  txt(x,"Hole "+v.hole,90,150,"700 96px "+PF);
+  txt(x,S.hasPlay?"Played up the page · front of green at the bottom":"North is up · no line of play set",92,192,"400 22px "+PB,"#5b6b5e");
+  txt(x,S.rel?"Falls "+S.rel:"Falls to the "+S.fall,PW-90,120,"700 30px "+PB,"#1f5f3a","right");
+  txt(x,`tilt ${S.tilt.toFixed(1)}% · towards the ${S.fall}`,PW-90,156,"400 22px "+PB,"#5b6b5e","right");
+  const B=1060,bx=(PW-B)/2,by=230, Mm=Math.max(S.depth,S.width)+8, P=B/Mm, D=Mm*Math.SQRT2+2;
+  // centre of the outline's box in the page frame -> world
+  const wx=S.cx+S.uc*S.eu[0]+S.vc*S.ev[0], wy=S.cy+S.uc*S.eu[1]+S.vc*S.ev[1];
+  const comp=await greenComposite(id,wx,wy,D,P,withSat,alpha);
+  const th=-Math.PI/2-Math.atan2(S.d[1],S.d[0]);
+  x.save(); x.beginPath(); x.rect(bx,by,B,B); x.clip(); x.fillStyle="#e9ede6"; x.fillRect(bx,by,B,B);
+  x.translate(bx+B/2,by+B/2); x.rotate(th); x.drawImage(comp,-comp.width/2,-comp.height/2); x.restore();
+  x.strokeStyle="#d6ddd3"; x.lineWidth=2; x.strokeRect(bx,by,B,B);
+  // north arrow
+  const nx=Math.cos(th-Math.PI/2),ny=Math.sin(th-Math.PI/2),ax=bx+B-60,ay=by+60;
+  x.fillStyle="rgba(255,255,255,.92)";x.beginPath();x.arc(ax,ay,44,0,7);x.fill();x.strokeStyle="#18241b";x.lineWidth=4;
+  x.beginPath();x.moveTo(ax-nx*26,ay-ny*26);x.lineTo(ax+nx*22,ay+ny*22);x.stroke();
+  x.fillStyle="#18241b";x.beginPath();x.moveTo(ax+nx*34,ay+ny*34);x.lineTo(ax+nx*14-ny*12,ay+ny*14+nx*12);x.lineTo(ax+nx*14+ny*12,ay+ny*14-nx*12);x.closePath();x.fill();
+  txt(x,"N",ax-nx*36,ay-ny*36+9,"700 24px "+PB,"#18241b","center");
+  if(S.hasPlay){txt(x,"▲  DIRECTION OF PLAY  ▲",PW/2,by+B+40,"700 22px "+PB,"#1f5f3a","center");txt(x,"BACK",PW/2,by-14,"700 18px "+PB,"#5b6b5e","center");}
+  // scale bar + legend
+  const sy=by+B+90; x.fillStyle="#18241b";x.fillRect(90,sy-8,5*P,10); txt(x,"5 m (5.5 yd)",100+5*P,sy+2,"400 18px "+PB);
+  SLOPE_BANDS.forEach((b,i)=>{const lx=560+i*120;x.fillStyle=b[1];x.fillRect(lx,sy-16,26,20);x.strokeStyle="#18241b";x.lineWidth=1;x.strokeRect(lx,sy-16,26,20);txt(x,b[2],lx+34,sy,"400 18px "+PB);});
+  const stats=[[`${S.depth.toFixed(0)} × ${S.width.toFixed(0)} m`,(S.hasPlay?"depth × width":"north–south × east–west")+` (${(S.depth*1.0936).toFixed(0)} × ${(S.width*1.0936).toFixed(0)} yd)`],
+    [`${S.area} m²`,"putting surface"],[`${S.rng.toFixed(0)} cm`,"high point to low point"],
+    [`${S.flat.toFixed(0)}%`,"of surface under 2% slope"],[`${S.steep.toFixed(0)}%`,"steeper than 3%"],[`${S.maxs.toFixed(1)}%`,"steepest areas"]];
+  stats.forEach((s,i)=>{const X=90+(i%3)*370,Y=by+B+170+Math.floor(i/3)*110; x.fillStyle="#d6ddd3";x.fillRect(X,Y-44,330,3);
+    txt(x,s[0],X,Y,"700 34px "+PB); txt(x,s[1].toUpperCase(),X,Y+30,"500 15px "+PB,"#5b6b5e");});
+  footer(x,["Arrows point downhill, longer for steeper ground. Lines every 5 cm of height, bold every 20 cm.",
+    "Elevation: Welsh Government LiDAR 2020–22 (1 m, flown Dec 2020). Imagery and outlines moved 1.5 m south to match the LiDAR.",
+    ...(withSat?[`Imagery © Google${satCopy?" · "+satCopy:""}`]:[])]);
+  return c;
+}
+async function coverPage(list,withSat){
+  const [c,x]=newPage(); txt(x,"Tredegar Park",90,150,"700 92px "+PF); txt(x,"Green book · holes "+list[0][1].hole+"–"+list[list.length-1][1].hole,92,205,"500 36px "+PB,"#1f5f3a");
+  txt(x,new Date().toLocaleDateString("en-GB",{day:"numeric",month:"long",year:"numeric"}),PW-90,205,"400 20px "+PB,"#5b6b5e","right");
+  const bx=60,by=250,bw=PW-120,bh=PH-by-130, sc=Math.min(bw/W,bh/H), cw=Math.round(W*sc), ch=Math.round(H*sc), ox=bx+(bw-cw)/2, oy=by;
+  const mc=document.createElement("canvas");mc.width=cw;mc.height=ch;const m=mc.getContext("2d");
+  if(withSat)await satPaint(m,0,0,W,H,cw,ch,17); else m.drawImage(base,0,0,cw,ch);
+  m.strokeStyle="#fff";m.lineWidth=2;m.setLineDash([8,6]);m.beginPath();C.outline.forEach((p,i)=>i?m.lineTo(p[0]*sc,p[1]*sc):m.moveTo(p[0]*sc,p[1]*sc));m.closePath();m.stroke();m.setLineDash([]);
+  list.forEach(([id,v])=>{const pl=v.play;if(Array.isArray(pl)&&pl.length>=2)drawArrowLine(m,pl.map(q=>[q[0]*sc,q[1]*sc]),2.5,12,"#ffffff");});
+  list.forEach(([id,v])=>{const o=outlineOf(id);m.fillStyle="rgba(255,255,255,.85)";m.strokeStyle="#18241b";m.lineWidth=1.5;m.beginPath();o.forEach((p,i)=>i?m.lineTo(p[0]*sc,p[1]*sc):m.moveTo(p[0]*sc,p[1]*sc));m.closePath();m.fill();m.stroke();
+    const S=greenStats(id,v), off=S.hasPlay?[S.d[0]*24,S.d[1]*24]:[0,-22], X=S.cx*sc+off[0],Y=S.cy*sc+off[1];
+    m.fillStyle="#1f5f3a";m.strokeStyle="#fff";m.lineWidth=2.5;m.beginPath();m.arc(X,Y,17,0,7);m.fill();m.stroke();
+    m.fillStyle="#fff";m.font="700 22px "+PF;m.textAlign="center";m.textBaseline="middle";m.fillText(String(v.hole),X,Y+1);});
+  x.drawImage(mc,ox,oy); x.strokeStyle="#d6ddd3";x.lineWidth=2;x.strokeRect(ox,oy,cw,ch);
+  x.fillStyle="#fff";x.fillRect(ox+20,oy+ch-50,100*sc+90,34);x.fillStyle="#18241b";x.fillRect(ox+30,oy+ch-38,100*sc,10);txt(x,"100 m",ox+40+100*sc,oy+ch-26,"700 18px "+PB);
+  footer(x,["Greens and lines of play traced on Google satellite. Elevation from Welsh Government LiDAR 2020–22.",(withSat?`Imagery © Google${satCopy?" · "+satCopy:""}. `:"")+"Course outline © OpenStreetMap contributors."]);
+  return c;
+}
+function tablePage(list){
+  const [c,x]=newPage(); txt(x,"At a glance",90,150,"700 80px "+PF);
+  const cols=[90,170,560,770,880,1010,1130],hdr=["Hole","Falls","Towards","Tilt","High–low","Size (m)","Under 2%"];
+  hdr.forEach((h,i)=>txt(x,h,cols[i],250,"700 20px "+PB)); x.fillStyle="#18241b";x.fillRect(90,262,PW-180,2);
+  list.forEach(([id,v],r)=>{const S=greenStats(id,v),Y=305+r*62;
+    [String(v.hole),S.rel||"–",S.fall,S.tilt.toFixed(1)+"%",S.rng.toFixed(0)+" cm",S.depth.toFixed(0)+"×"+S.width.toFixed(0),S.flat.toFixed(0)+"%"].forEach((t,i)=>txt(x,t,cols[i],Y,(i?"400 ":"700 ")+"21px "+PB));
+    x.fillStyle="#e3e8e1";x.fillRect(90,Y+20,PW-180,1);});
+  footer(x,["Tilt is the overall slope of the putting surface. “Back to front” means the green slopes towards you as you approach."]);
+  return c;
+}
+$("printSat").onclick=async()=>{
+  const note=$("pinNote"), list=Object.keys(labels).map(k=>[k,labels[k]]).filter(([k,v])=>v.kind==="green"&&v.hole&&outlineOf(k)).sort((a,b)=>a[1].hole-b[1].hole);
+  if(!list.length){note.textContent="No greens have outlines yet.";return}
+  const withSat=satActive(), alpha=withSat?Math.max(.25,+$("satAlpha").value/100):1;
+  $("printSat").disabled=true; note.dataset.locked="1";
+  try{
+    await (document.fonts&&document.fonts.ready);
+    const book=$("printBook"); book.innerHTML="";
+    const add=cv=>{const d=document.createElement("div");d.className="ppage";d.appendChild(cv);book.appendChild(d);};
+    note.textContent="Preparing the cover…"; add(await coverPage(list,withSat)); add(tablePage(list));
+    for(let i=0;i<list.length;i++){note.textContent=`Preparing hole ${list[i][1].hole} (${i+1} of ${list.length})…`; add(await greenPage(list[i][0],list[i][1],withSat,alpha));}
+    note.textContent=withSat?"Ready. In the print window choose “Save as PDF” to keep a copy.":"Ready (no satellite: turn on Google satellite first to include it). In the print window choose “Save as PDF”.";
+    setTimeout(()=>window.print(),100);
+  }catch(e){note.textContent="Couldn’t build the book: "+(e&&e.message||e);}
+  finally{$("printSat").disabled=false;}
 };
 
 // ---------- green book download ----------
