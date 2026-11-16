@@ -1,0 +1,768 @@
+<title>Tredegar Park Greens</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: course map on the left, the selected green's close-up on the right; stacks on phones. */
+:root{
+  --bg:#f3f5f0; --surface:#ffffff; --ink:#18241b; --muted:#5b6b5e; --line:#d6ddd3;
+  --turf:#1f5f3a; --turf-soft:#e3eee5; --flag:#e3b21c; --warn:#b5462f;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#101612; --surface:#18201a; --ink:#e6ede6; --muted:#9aaa9d; --line:#2b372e;
+  --turf:#5fbf86; --turf-soft:#1d2d22; --flag:#f0c63e; --warn:#ef7a5f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#101612; --surface:#18201a; --ink:#e6ede6; --muted:#9aaa9d; --line:#2b372e;
+  --turf:#5fbf86; --turf-soft:#1d2d22; --flag:#f0c63e; --warn:#ef7a5f; color-scheme:dark}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 28px}
+h1,h2,h3{font-family:var(--display);font-weight:700;letter-spacing:.01em;margin:0;text-wrap:balance}
+h1{font-size:30px;line-height:1}
+h2{font-size:24px;line-height:1.05}
+.top{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 16px;margin-bottom:12px}
+.sub{color:var(--muted);font-size:13px}
+.topright{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+@media (max-width:600px){.topright{align-items:flex-start}}
+.holes{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+.chip{font-family:var(--display);font-weight:600;font-size:17px;min-width:36px;height:36px;border-radius:18px;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink);cursor:pointer;padding:0 10px}
+.chip[disabled]{opacity:.35;cursor:default}
+.chip.on{background:var(--turf);border-color:var(--turf);color:var(--bg)}
+.chip:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+.grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:18px;align-items:start}
+@media (max-width:860px){.grid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0}
+.panelhead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px}
+.mapwrap{overflow:auto;max-height:78vh;border-radius:6px;background:var(--turf-soft);touch-action:pan-x pan-y}
+#map{display:block;cursor:crosshair}
+.tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+button.btn{font:500 13px var(--body);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:6px;padding:6px 10px;cursor:pointer}
+button.btn.primary{background:var(--turf);color:var(--bg);border-color:var(--turf)}
+.legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted);margin-top:8px}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px;border:1px solid rgba(0,0,0,.15)}
+.stack{position:relative;display:inline-block;line-height:0}
+.gstack{display:block;width:100%}
+#mapImg,#gimg{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+#map,#gcanvas{position:relative}
+.satbar{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;margin-bottom:8px}
+.satbar[hidden],.keybox[hidden]{display:none!important}
+.keybox{display:flex;flex-direction:column;gap:6px;margin-bottom:8px;padding:8px;border:1px dashed var(--line);border-radius:6px}
+.keybox input{font:13px var(--mono);padding:6px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);min-width:0;flex:1 1 220px}
+.attrib{margin:4px 0 0;font-size:11px}
+#gcanvas{display:block;width:100%;max-width:100%;aspect-ratio:1/1;border-radius:6px;cursor:crosshair;touch-action:manipulation}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:10px 0}
+.stat{border-top:2px solid var(--line);padding-top:6px}
+.stat b{display:block;font-family:var(--mono);font-weight:500;font-size:18px;font-variant-numeric:tabular-nums}
+.stat span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.putt{background:var(--turf-soft);border-radius:8px;padding:10px 12px;margin:10px 0;font-size:14px}
+.putt b{font-family:var(--mono);font-weight:500}
+.label{display:flex;flex-wrap:wrap;gap:8px;align-items:center;border-top:1px solid var(--line);padding-top:10px;margin-top:10px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{font:500 13px var(--body);background:var(--surface);color:var(--ink);border:0;padding:6px 10px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button.on{background:var(--turf);color:var(--bg)}
+select{font:500 13px var(--body);padding:5px 8px;border-radius:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+.note{font-size:12px;color:var(--muted)}
+.empty{padding:40px 12px;text-align:center;color:var(--muted)}
+.foot{margin-top:18px;font-size:12px;color:var(--muted);max-width:75ch}
+.import{border-top:1px solid var(--line);margin-top:12px;padding-top:12px;display:flex;flex-direction:column;gap:6px}
+.import h3{font-size:19px}
+label.btn{font:500 13px var(--body);border:1px solid var(--line);border-radius:6px;padding:6px 10px;cursor:pointer;display:inline-block}
+label.btn.primary{background:var(--turf);color:var(--bg);border-color:var(--turf)}
+.drawbar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.drawbar span{display:inline-flex;gap:6px;flex-wrap:wrap}
+.drawbar span[hidden]{display:none!important}
+.cmp{margin:8px 0 0;font-size:13px;border-left:3px solid var(--flag);padding-left:8px}
+.glink{font-size:13px;color:var(--turf);font-weight:600}
+.pill{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;padding:2px 8px;border-radius:10px;background:var(--turf-soft);color:var(--turf)}
+.pill.warn{background:transparent;border:1px solid var(--flag);color:var(--ink)}
+#saveState{min-height:1.2em}
+</style>
+
+<div class="top">
+  <div>
+    <h1>Tredegar Park Greens</h1>
+    <div class="sub">Slopes from 1&nbsp;m LiDAR, Rogerstone course · tap a green on the map</div>
+  </div>
+  <div class="topright">
+    <button class="btn primary" id="bookBtn">Download green book (PDF)</button>
+    <div class="sub" id="saveMode">Loading course…</div>
+    <div class="note" id="bookNote"></div>
+  </div>
+</div>
+
+<nav class="holes" id="holes" aria-label="Holes"></nav>
+
+<div class="grid">
+  <section class="panel">
+    <div class="panelhead">
+      <h2>Course</h2>
+      <div class="tools">
+        <button class="btn" id="zoomOut" aria-label="Zoom out">−</button>
+        <button class="btn" id="zoomIn" aria-label="Zoom in">+</button>
+        <label class="note"><input type="checkbox" id="showTees"> show tees &amp; other pads</label>
+        <label class="note" id="pinToggle" hidden><input type="checkbox" id="showPins" checked> show my Google pins</label>
+      </div>
+    </div>
+    <div class="satbar" id="satbar" hidden>
+      <label class="note"><input type="checkbox" id="satOn"> Google satellite</label>
+      <label class="note">slope colours <input type="range" id="satAlpha" min="0" max="100" value="45" aria-label="Slope colour strength"></label>
+      <button class="btn" id="keyBtn">Google key</button>
+      <span class="note" id="satNote"></span>
+    </div>
+    <div class="keybox" id="keybox" hidden>
+      <label class="note" for="keyIn">Paste your Google Maps Platform API key. It stays in this browser only.</label>
+      <div class="tools"><input id="keyIn" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…"><button class="btn primary" id="keySave">Save key</button><button class="btn" id="keyClear">Forget key</button></div>
+    </div>
+    <div class="mapwrap" id="mapwrap"><div class="stack"><canvas id="mapImg" aria-hidden="true"></canvas><canvas id="map"></canvas></div></div>
+    <p class="attrib note" id="mapAttrib" hidden></p>
+    <div class="legend">
+      <span><i style="background:#1f5f3a"></i>green with hole number</span>
+      <span><i style="background:#fff;border:2px dashed #e3b21c"></i>likely green, not confirmed</span>
+      <span><i style="background:#9aa39b"></i>tee or other flat pad</span>
+      <span><i style="background:#e8d9a8"></i>bunker</span>
+      <span><i style="background:#ffd23f"></i>your Google pin</span>
+      <span><i style="background:transparent;border:2px solid #fff;outline:1px solid #18241b"></i>your outline</span>
+    </div>
+    <p class="note">Tap anywhere on the course to open a close-up there, so you can add a green the detection missed.</p>
+    <div class="import">
+      <h3>Check against your Google map</h3>
+      <p class="note">In Google My Maps, drop a pin on each green, or use “Draw a line › Add line or shape” to trace round it, and name it with the hole number (for example “7”). Add a line from the fairway into each green named “LoP 7” and so on to set the direction of play. Then choose ⋮ › Export to KML/KMZ, tick “Export to a .KML file”, and import the file here. Your pins appear on the course map as yellow flags.</p>
+      <div class="tools">
+        <label class="btn primary" for="kmlFile">Import KML file</label>
+        <input type="file" id="kmlFile" accept=".kml,application/vnd.google-earth.kml+xml,application/xml,text/xml" hidden>
+        <button class="btn" id="applyPins" hidden>Use pin numbers as hole labels</button>
+        <button class="btn" id="exportKml" hidden>Export my greens (KML)</button>
+      </div>
+      <p class="note" id="pinNote"></p>
+    </div>
+  </section>
+
+  <section class="panel" id="detail">
+    <div class="empty" id="emptyDetail">Pick a hole above or tap a green on the map to see its slopes.</div>
+    <div id="gview" hidden>
+      <div class="panelhead">
+        <h2 id="gtitle">Green</h2>
+        <span class="pill" id="gpill"></span>
+      </div>
+      <div class="stack gstack"><canvas id="gimg" width="960" height="960" aria-hidden="true"></canvas><canvas id="gcanvas" width="960" height="960" aria-label="Green slope map"></canvas></div>
+      <p class="attrib note" id="gAttrib" hidden></p>
+      <div class="legend" id="slopeLegend"></div>
+      <div class="drawbar">
+        <button class="btn" id="drawBtn">Draw green outline</button>
+        <span id="drawTools" hidden>
+          <button class="btn" id="drawUndo">Undo point</button>
+          <button class="btn primary" id="drawDone">Save outline</button>
+          <button class="btn" id="drawCancel">Cancel</button>
+        </span>
+        <button class="btn" id="drawClear" hidden>Remove outline</button>
+        <span class="note" id="drawHint"></span>
+      </div>
+      <p class="cmp" id="cmp" hidden></p>
+      <div class="stats" id="gstats"></div>
+      <a class="glink" id="glink" href="#" target="_blank" rel="noopener">Check this spot on Google Maps satellite ↗</a>
+      <div class="putt" id="putt">Tap your ball, then the hole, to read the putt.</div>
+      <div class="label">
+        <span class="note">This is:</span>
+        <div class="seg" id="kindSeg">
+          <button data-k="green">Green</button><button data-k="tee">Tee</button><button data-k="hide">Not a green</button>
+        </div>
+        <label class="note" for="holeSel">Hole</label>
+        <select id="holeSel"></select>
+        <span class="note" id="saveState"></span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<p class="foot">Elevation: Welsh Government LiDAR 2020–22, 1&nbsp;m terrain model flown December 2020, via DataMapWales, smoothed over about 1&nbsp;m. Google satellite imagery sits about 1.5&nbsp;m north of the LiDAR here, so pins and shapes imported from Google My Maps are moved 1.5&nbsp;m south to line up. Course outline and bunkers © OpenStreetMap contributors. Small breaks under a metre won’t show, and a green rebuilt since 2020 won’t match. Greens were found automatically as flat raised pads; hole numbers are yours to set.</p>
+
+<script>
+(function(){
+"use strict";
+const SLOPE_BANDS=[[1,"#e6efdf","0–1%"],[2,"#b9d9a3","1–2%"],[3,"#f3d66b","2–3%"],[4,"#f0a04b","3–4%"],[99,"#d04a3b","4%+"]];
+let WIN=48, PXM=20; // close-up window in metres, canvas px per metre (960/WIN)
+let C=null, Z=null, GX=null, GY=null, W=0, H=0;
+let labels={};       // id -> {kind,hole,x,y}
+let db=null, zoom=1, current=null, putt=[], pins=[], drawing=null;
+const $=id=>document.getElementById(id);
+
+function safeLS(fn){try{return fn()}catch(e){return null}}
+
+// ---------- data ----------
+fetch("course.json").then(r=>r.json()).then(init).catch(()=>{$("saveMode").textContent="Couldn’t load the course data. Reload the page to try again."});
+
+const HOSTED=!!window.claude||/claude|anthropic/.test(location.hostname);
+function init(data){
+  C=data; W=C.w; H=C.h;
+  const bin=atob(C.dem), u8=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)u8[i]=bin.charCodeAt(i);
+  const u16=new Uint16Array(u8.buffer);
+  Z=new Float32Array(W*H); GX=new Float32Array(W*H); GY=new Float32Array(W*H);
+  for(let i=0;i<W*H;i++)Z[i]=u16[i]/100;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=y*W+x, xl=Math.max(x-1,0), xr=Math.min(x+1,W-1), yu=Math.max(y-1,0), yd=Math.min(y+1,H-1);
+    GX[i]=(Z[y*W+xr]-Z[y*W+xl])/(xr-xl); GY[i]=(Z[yd*W+x]-Z[yu*W+x])/(yd-yu);
+  }
+  C.pads.forEach(p=>{ if(p.mask){p.m=new Uint8Array(p.mw*p.mh); for(let i=0;i<p.m.length;i++)p.m[i]=p.mask.charCodeAt(i)===49;} });
+  const local=safeLS(()=>JSON.parse(localStorage.getItem("tpg-labels")||"{}"));
+  if(local)labels=local;
+  if(!HOSTED){ // own website: start from the saved snapshot, then this browser's changes on top
+    fetch("labels.json").then(r=>r.ok?r.json():{}).then(snap=>{labels=Object.assign({},snap,labels);drawMap();buildHoles();if(current)renderDetail();}).catch(()=>{});
+    $("satbar").hidden=false; $("exportKml").hidden=false; satInit();
+  }
+  const lp=safeLS(()=>JSON.parse(localStorage.getItem("tpg-pins")||"null")); if(lp)setPins(lp);
+  buildBase(); drawMap(); buildHoles(); buildLegend(); buildHoleSelect();
+  $("saveMode").textContent="Labels saved on this device";
+  connectDb();
+  openFromHash();
+}
+
+async function connectDb(){
+  try{
+    if(!window.claude||!window.claude.use)return;
+    const d=await window.claude.use("db"); if(!d)return;
+    db=d;
+    const t=setTimeout(()=>{$("saveMode").textContent="Labels saved on this device (shared labels didn’t load)"},10000);
+    db.collection("greens").onSnapshot(snap=>{
+      clearTimeout(t);
+      const next={};
+      snap.docs.forEach(doc=>{const v=doc.data(); if(v)next[doc.id]=v;});
+      labels=Object.assign({},labels,next);
+      $("saveMode").textContent="Hole labels shared across your devices";
+      drawMap(); buildHoles(); if(current)renderDetail();
+    },()=>{clearTimeout(t);$("saveMode").textContent="Labels saved on this device"});
+    db.collection("pins").doc("all").onSnapshot(d=>{const v=d.exists&&d.data(); if(v&&Array.isArray(v.items)){setPins(v.items);drawMap();}},()=>{});
+  }catch(e){}
+}
+
+// ---------- helpers ----------
+function bil(A,x,y){
+  x=Math.max(0,Math.min(W-1.001,x)); y=Math.max(0,Math.min(H-1.001,y));
+  const x0=Math.floor(x),y0=Math.floor(y),fx=x-x0,fy=y-y0,i=y0*W+x0;
+  return A[i]*(1-fx)*(1-fy)+A[i+1]*fx*(1-fy)+A[i+W]*(1-fx)*fy+A[i+W+1]*fx*fy;
+}
+function bandColor(pct){for(const b of SLOPE_BANDS)if(pct<b[0])return b[1];return SLOPE_BANDS[4][1]}
+function hex(c){return[parseInt(c.slice(1,3),16),parseInt(c.slice(3,5),16),parseInt(c.slice(5,7),16)]}
+const BAND_RGB=SLOPE_BANDS.map(b=>hex(b[1]));
+function compass(dx,dy){ // screen vector (y down) -> compass word
+  const ang=(Math.atan2(dx,-dy)*180/Math.PI+360)%360;
+  return["north","north-east","east","south-east","south","south-west","west","north-west"][Math.round(ang/45)%8];
+}
+function toLL(x,y){const g=C.geo;return[g[0]+g[1]*x+g[2]*y,g[3]+g[4]*x+g[5]*y]}
+function toXY(lon,lat){const g=C.geo,a=g[1],b=g[2],c=g[4],d=g[5],u=lon-g[0],v=lat-g[3],det=a*d-b*c;return[(d*u-b*v)/det,(-c*u+a*v)/det]}
+function pip(poly,x,y){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];
+  if((a[1]>y)!==(b[1]>y)&&x<(b[0]-a[0])*(y-a[1])/(b[1]-a[1])+a[0])c=!c;}return c}
+function outlineOf(id){const l=labels[id];return l&&Array.isArray(l.outline)&&l.outline.length>=3?l.outline:null}
+function insideFn(id){const o=outlineOf(id), pad=padById(id);
+  if(o)return(x,y)=>pip(o,x,y); if(pad)return(x,y)=>inMask(pad,x,y); return null}
+function padById(id){return C.pads.find(p=>p.id===id)}
+function labelOf(id){
+  const l=labels[id]; if(l)return l;
+  const p=padById(id); if(p)return{kind:p.guess,hole:null,guessed:true};
+  return{kind:null,hole:null};
+}
+function inMask(p,x,y){ if(!p||!p.m)return true;
+  const mx=Math.floor(x)-p.mx,my=Math.floor(y)-p.my;
+  return mx>=0&&my>=0&&mx<p.mw&&my<p.mh&&p.m[my*p.mw+mx]===1;}
+
+// ---------- course map ----------
+let base=null;
+function buildBase(){
+  base=document.createElement("canvas"); base.width=W; base.height=H;
+  const ctx=base.getContext("2d"), img=ctx.createImageData(W,H), d=img.data;
+  const az=315*Math.PI/180, alt=40*Math.PI/180;
+  for(let i=0;i<W*H;i++){
+    const gx=GX[i]*2.5, gy=GY[i]*2.5, slope=Math.atan(Math.hypot(gx,gy)), aspect=Math.atan2(gx,-gy);
+    let hs=Math.sin(alt)*Math.cos(slope)+Math.cos(alt)*Math.sin(slope)*Math.cos(az-aspect);
+    hs=Math.max(0,Math.min(1,hs));
+    d[i*4]=40+hs*190; d[i*4+1]=62+hs*185; d[i*4+2]=45+hs*160; d[i*4+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+  ctx.fillStyle="#e8d9a8"; ctx.strokeStyle="#b49a52"; ctx.lineWidth=.8;
+  C.bunkers.forEach(b=>{ctx.beginPath();b.forEach((p,j)=>j?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.fill();ctx.stroke();});
+  ctx.strokeStyle="rgba(255,255,255,.85)"; ctx.lineWidth=2; ctx.setLineDash([6,4]);
+  ctx.beginPath(); C.outline.forEach((p,j)=>j?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); ctx.stroke(); ctx.setLineDash([]);
+}
+function markers(){
+  const out=[];
+  C.pads.forEach(p=>out.push({id:p.id,x:p.x,y:p.y,...labelOf(p.id)}));
+  Object.keys(labels).forEach(id=>{ if(!padById(id)&&labels[id].kind!=="hide"&&labels[id].x!=null)out.push({id,x:labels[id].x,y:labels[id].y,...labels[id]}); });
+  return out;
+}
+function drawMap(){
+  const S=2*zoom, cv=$("map"); cv.width=W*S; cv.height=H*S;
+  cv.style.width=(W*zoom*Math.min(1,($("mapwrap").clientWidth||W)/W))+"px";
+  const ctx=cv.getContext("2d"); ctx.imageSmoothingEnabled=true;
+  if(satActive()){ctx.clearRect(0,0,cv.width,cv.height);ctx.globalAlpha=+$("satAlpha").value/100*.6;ctx.drawImage(base,0,0,W*S,H*S);ctx.globalAlpha=1;}
+  else ctx.drawImage(base,0,0,W*S,H*S);
+  drawSat("map");
+  const K=cv.width/(parseFloat(cv.style.width)||W); // canvas px per screen px
+  const R=n=>n*K;
+  const showAll=$("showTees").checked;
+  markers().forEach(m=>{
+    const x=m.x*S, y=m.y*S, sel=current&&current.id===m.id;
+    if(m.kind==="green"&&!m.guessed){
+      ctx.fillStyle="#1f5f3a"; ctx.strokeStyle=sel?"#e3b21c":"#fff"; ctx.lineWidth=R(sel?3:1.5);
+      ctx.beginPath(); ctx.arc(x,y,R(11),0,7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle="#fff"; ctx.font=`700 ${R(13)}px "Barlow Condensed",sans-serif`; ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText(m.hole||"?",x,y+1);
+    }else if(m.kind==="green"){
+      ctx.fillStyle="rgba(255,255,255,.9)"; ctx.strokeStyle="#e3b21c"; ctx.lineWidth=R(2); ctx.setLineDash([R(3),R(2)]);
+      ctx.beginPath(); ctx.arc(x,y,R(9),0,7); ctx.fill(); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle="#18241b"; ctx.font=`700 ${R(12)}px "Barlow Condensed",sans-serif`; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("?",x,y+1);
+    }else if(showAll&&m.kind!=="hide"||sel){
+      ctx.fillStyle="#9aa39b"; ctx.strokeStyle=sel?"#e3b21c":"#fff"; ctx.lineWidth=R(sel?2.5:1);
+      ctx.beginPath(); ctx.arc(x,y,R(5),0,7); ctx.fill(); ctx.stroke();
+    }
+  });
+  Object.keys(labels).forEach(id=>{const pl=labels[id].play; if(Array.isArray(pl)&&pl.length>=2)drawArrowLine(ctx,pl.map(q=>[q[0]*S,q[1]*S]),R(2),R(9),"#ffffff");});
+  Object.keys(labels).forEach(id=>{const o=outlineOf(id); if(!o)return;
+    ctx.lineJoin="round"; for(const [w,c] of [[R(3.5),"rgba(24,36,27,.8)"],[R(1.6),"#fff"]]){ctx.strokeStyle=c;ctx.lineWidth=w;ctx.beginPath();o.forEach((p,i)=>i?ctx.lineTo(p[0]*S,p[1]*S):ctx.moveTo(p[0]*S,p[1]*S));ctx.closePath();ctx.stroke();}});
+  if(pins.length&&$("showPins").checked){
+    pins.forEach(p=>{ if(!p.poly)return; ctx.strokeStyle="#ffd23f";ctx.lineWidth=R(2);ctx.setLineDash([R(4),R(3)]);ctx.beginPath();p.poly.forEach((q,i)=>i?ctx.lineTo(q[0]*S,q[1]*S):ctx.moveTo(q[0]*S,q[1]*S));ctx.closePath();ctx.stroke();ctx.setLineDash([]);});
+    pins.forEach(p=>{ if(!p.line)return; drawArrowLine(ctx,p.line.map(q=>[q[0]*S,q[1]*S]),R(2),R(9),"#ffd23f"); });
+    pins.forEach(p=>{if(p.line)return; const x=p.x*S,y=p.y*S;
+      ctx.strokeStyle="#18241b";ctx.lineWidth=R(1.5);ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y-R(18));ctx.stroke();
+      ctx.fillStyle="#ffd23f";ctx.beginPath();ctx.moveTo(x,y-R(18));ctx.lineTo(x+R(11),y-R(14));ctx.lineTo(x,y-R(10));ctx.closePath();ctx.fill();ctx.stroke();
+      if(p.name){ctx.font=`600 ${R(12)}px Inter,sans-serif`;ctx.textAlign="left";ctx.textBaseline="middle";ctx.lineWidth=R(3);ctx.strokeStyle="rgba(255,255,255,.9)";
+        ctx.strokeText(p.name.slice(0,18),x+R(13),y-R(14));ctx.fillStyle="#18241b";ctx.fillText(p.name.slice(0,18),x+R(13),y-R(14));}
+    });
+  }
+  if(current&&!markers().some(m=>m.id===current.id)){
+    ctx.strokeStyle="#e3b21c"; ctx.lineWidth=R(3); ctx.beginPath(); ctx.arc(current.x*S,current.y*S,R(10),0,7); ctx.stroke();
+  }
+}
+$("map").addEventListener("click",e=>{
+  const r=e.currentTarget.getBoundingClientRect(), x=(e.clientX-r.left)/r.width*W, y=(e.clientY-r.top)/r.height*H;
+  const showAll=$("showTees").checked; let best=null, bd=1e9;
+  markers().forEach(m=>{ if(m.kind==="hide")return; if(!(m.kind==="green"||showAll))return;
+    const d=Math.hypot(m.x-x,m.y-y); if(d<bd){bd=d;best=m;} });
+  const tol=16/(r.width/W); // ~16 screen px
+  if(best&&bd<Math.max(tol,10))select(best.id,best.x,best.y);
+  else select("u"+Math.round(x)+"_"+Math.round(y),x,y);
+});
+$("zoomIn").onclick=()=>{zoom=Math.min(zoom*1.5,4);drawMap()};
+$("zoomOut").onclick=()=>{zoom=Math.max(zoom/1.5,1);drawMap()};
+$("showTees").onchange=drawMap; $("showPins").onchange=drawMap;
+window.addEventListener("resize",()=>{if(C)drawMap()});
+
+// ---------- holes ----------
+function holeMap(){const h={};markers().forEach(m=>{if(m.kind==="green"&&!m.guessed&&m.hole)h[m.hole]=m;});return h}
+function buildHoles(){
+  const hm=holeMap(), nav=$("holes"); nav.innerHTML="";
+  for(let n=1;n<=18;n++){
+    const b=document.createElement("button"); b.className="chip"; b.textContent=n; b.id="hole-"+n;
+    if(!hm[n]){b.disabled=true;b.title="No green labelled as hole "+n+" yet";}
+    else b.onclick=()=>select(hm[n].id,hm[n].x,hm[n].y);
+    if(current&&hm[n]&&hm[n].id===current.id)b.classList.add("on");
+    nav.appendChild(b);
+  }
+  const unconf=markers().filter(m=>m.kind==="green"&&m.guessed).length;
+  if(unconf){const s=document.createElement("span");s.className="note";s.style.alignSelf="center";
+    s.textContent=`${unconf} likely greens still need a hole number (dashed rings on the map)`;nav.appendChild(s);}
+}
+function buildHoleSelect(){
+  const s=$("holeSel"); s.innerHTML='<option value="">–</option>'+Array.from({length:18},(_,i)=>`<option value="${i+1}">${i+1}</option>`).join("");
+}
+function buildLegend(){
+  $("slopeLegend").innerHTML=SLOPE_BANDS.map(b=>`<span><i style="background:${b[1]}"></i>${b[2]}</span>`).join("")+
+    '<span>arrows point downhill · lines every 5&nbsp;cm of height</span>';
+}
+
+// ---------- close-up ----------
+function select(id,x,y){
+  current={id,x,y}; putt=[];
+  try{history.replaceState(null,"","#"+id)}catch(e){}
+  $("emptyDetail").hidden=true; $("gview").hidden=false;
+  renderDetail(); drawMap(); buildHoles();
+  if(window.innerWidth<=860)$("detail").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"});
+}
+function openFromHash(){
+  const h=(location.hash||"").slice(1); if(!h)return;
+  const p=padById(h); if(p)return select(p.id,p.x,p.y);
+  const m=/^u(\d+)_(\d+)$/.exec(h); if(m)select(h,+m[1],+m[2]);
+}
+window.addEventListener("hashchange",openFromHash);
+
+function view(){ // top-left of window in grid coords
+  const p=padById(current.id);
+  WIN=p?Math.max(28,Math.min(48,Math.max(p.mw,p.mh))):40; PXM=960/WIN;
+  const x0=Math.max(0,Math.min(W-WIN,current.x-WIN/2)), y0=Math.max(0,Math.min(H-WIN,current.y-WIN/2));
+  return{x0,y0};
+}
+function renderDetail(){
+  const {x0,y0}=view(), pad=padById(current.id), l=labelOf(current.id), IN=insideFn(current.id);
+  const cv=$("gcanvas"), ctx=cv.getContext("2d"), N=WIN*PXM, img=ctx.createImageData(N,N), d=img.data;
+  const SATA=satActive()?Math.round(+$("satAlpha").value/100*255):255; drawSat("g");
+  const zs=new Float32Array(N*N);
+  for(let py=0;py<N;py++)for(let px=0;px<N;px++){
+    const gx=x0+px/PXM, gy=y0+py/PXM, i=py*N+px;
+    zs[i]=bil(Z,gx,gy);
+    const pct=Math.hypot(bil(GX,gx,gy),bil(GY,gx,gy))*100;
+    let [r,g,b]=BAND_RGB[SLOPE_BANDS.findIndex(s=>pct<s[0])<0?4:SLOPE_BANDS.findIndex(s=>pct<s[0])];
+    if(IN&&!IN(gx,gy)){r=r*.45+120;g=g*.45+125;b=b*.45+118;}
+    d[i*4]=r;d[i*4+1]=g;d[i*4+2]=b;d[i*4+3]=SATA;
+  }
+  for(let py=0;py<N-1;py++)for(let px=0;px<N-1;px++){
+    const i=py*N+px, a=Math.floor(zs[i]/.05);
+    if(a!==Math.floor(zs[i+1]/.05)||a!==Math.floor(zs[i+N]/.05)){
+      const strong=(Math.floor(zs[i]/.2)!==Math.floor(zs[i+1]/.2))||(Math.floor(zs[i]/.2)!==Math.floor(zs[i+N]/.2));
+      const k=strong?.35:.6; d[i*4]*=k;d[i*4+1]*=k;d[i*4+2]*=k; if(SATA<255)d[i*4+3]=Math.max(SATA,strong?200:150);
+    }
+  }
+  ctx.putImageData(img,0,0);
+  // arrows
+  ctx.lineCap="round";
+  for(let gy=y0+1;gy<y0+WIN;gy+=2)for(let gx=x0+1;gx<x0+WIN;gx+=2){
+    const ux=-bil(GX,gx,gy), uy=-bil(GY,gx,gy), pct=Math.hypot(ux,uy)*100; if(pct<.15)continue;
+    const inside=!IN||IN(gx,gy), len=Math.min(1,.35+pct/6)*1.6*PXM, nx=ux/Math.hypot(ux,uy), ny=uy/Math.hypot(ux,uy);
+    const cx=(gx-x0)*PXM, cy=(gy-y0)*PXM, ex=cx+nx*len/2, ey=cy+ny*len/2, sx=cx-nx*len/2, sy=cy-ny*len/2;
+    ctx.strokeStyle=inside?"rgba(20,30,22,.85)":"rgba(20,30,22,.3)"; ctx.fillStyle=ctx.strokeStyle; ctx.lineWidth=inside?3:2;
+    ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(ex,ey);ctx.stroke();
+    ctx.beginPath();ctx.moveTo(ex,ey);ctx.lineTo(ex-nx*9-ny*6,ey-ny*9+nx*6);ctx.lineTo(ex-nx*9+ny*6,ey-ny*9-nx*6);ctx.closePath();ctx.fill();
+  }
+  // north + scale
+  ctx.fillStyle="rgba(255,255,255,.88)"; ctx.fillRect(N-74,12,62,74); ctx.fillRect(12,N-52,5*PXM+24,40);
+  ctx.fillStyle="#18241b"; ctx.font='700 26px "Barlow Condensed",sans-serif'; ctx.textAlign="center"; ctx.fillText("N",N-43,78);
+  ctx.beginPath(); ctx.moveTo(N-43,20); ctx.lineTo(N-55,50); ctx.lineTo(N-31,50); ctx.closePath(); ctx.fill();
+  ctx.fillRect(24,N-28,5*PXM,6); ctx.font='500 18px "IBM Plex Mono",monospace'; ctx.textAlign="left"; ctx.fillText("5 m",24,N-34);
+  drawOutline(ctx,x0,y0,outlineOf(current.id),false);
+  {const pl=labels[current.id]&&labels[current.id].play; if(Array.isArray(pl)&&pl.length>=2){
+    drawArrowLine(ctx,pl.map(q=>[(q[0]-x0)*PXM,(q[1]-y0)*PXM]),5,26,"#ffffff");
+    const q=pl[pl.length-2],e=pl[pl.length-1],t=[(q[0]+e[0])/2,(q[1]+e[1])/2];}}
+  if(drawing)drawOutline(ctx,x0,y0,drawing,true);
+  drawPutt(ctx,x0,y0);
+
+  // stats over green surface (or 12 m circle when no pad)
+  let n=0,sx=0,sy=0,mx=0,zmin=1e9,zmax=-1e9;
+  for(let gy=Math.ceil(y0);gy<y0+WIN;gy++)for(let gx=Math.ceil(x0);gx<x0+WIN;gx++){
+    const ok=IN?IN(gx+.5,gy+.5):Math.hypot(gx-current.x,gy-current.y)<12; if(!ok)continue;
+    const i=gy*W+gx; n++; sx+=GX[i]; sy+=GY[i]; mx=Math.max(mx,Math.hypot(GX[i],GY[i])); zmin=Math.min(zmin,Z[i]); zmax=Math.max(zmax,Z[i]);
+  }
+  const avg=Math.hypot(sx/n,sy/n)*100;
+  $("gstats").innerHTML=[
+    [ (zmax-zmin)*100|0, "high to low", " cm"],
+    [ avg.toFixed(1), "overall tilt", "%"],
+    [ (mx*100).toFixed(1), "steepest spot", "%"],
+    [ compass(-sx,-sy), "falls towards", ""]
+  ].map(s=>`<div class="stat"><b>${s[0]}${s[2]}</b><span>${s[1]}</span></div>`).join("");
+
+  const title=l.kind==="green"&&!l.guessed&&l.hole?`Hole ${l.hole} green`:l.kind==="tee"?"Tee or flat pad":pad?"Possible green":"Close-up";
+  $("gtitle").textContent=title;
+  {const ll=toLL(current.x,current.y); $("glink").href=`https://www.google.com/maps/@?api=1&map_action=map&center=${ll[1].toFixed(6)},${ll[0].toFixed(6)}&zoom=20&basemap=satellite`;}
+  const pill=$("gpill");
+  if(l.guessed){pill.textContent=l.kind==="green"?"likely green · unconfirmed":"likely tee · unconfirmed";pill.className="pill warn";}
+  else if(l.kind){pill.textContent="labelled";pill.className="pill";} else {pill.textContent=pad?"":"your point";pill.className="pill";}
+  pill.hidden=!pill.textContent;
+  document.querySelectorAll("#kindSeg button").forEach(b=>b.classList.toggle("on",!l.guessed&&b.dataset.k===l.kind));
+  $("holeSel").value=l.hole||""; $("holeSel").disabled=!(l.kind==="green");
+  if(l.guessed&&l.kind==="green")$("holeSel").disabled=false;
+  updatePuttText(); updateDrawUi(); updateCompare(pad);
+}
+function drawArrowLine(ctx,P,w,head,col){
+  const a=P[P.length-2],b=P[P.length-1],L=Math.hypot(b[0]-a[0],b[1]-a[1])||1,ux=(b[0]-a[0])/L,uy=(b[1]-a[1])/L;
+  for(const [ww,c] of [[w*2.2,"rgba(24,36,27,.85)"],[w,col]]){
+    ctx.strokeStyle=c;ctx.lineWidth=ww;ctx.setLineDash([]);ctx.beginPath();P.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke();
+    ctx.fillStyle=c;ctx.beginPath();const hh=head*(ww>w?1.25:1);ctx.moveTo(b[0]+ux*hh*.2,b[1]+uy*hh*.2);ctx.lineTo(b[0]-ux*hh-uy*hh*.6,b[1]-uy*hh+ux*hh*.6);ctx.lineTo(b[0]-ux*hh+uy*hh*.6,b[1]-uy*hh-ux*hh*.6);ctx.closePath();ctx.fill();
+  }
+}
+function drawOutline(ctx,x0,y0,o,live){
+  if(!o||!o.length)return;
+  const P=o.map(p=>[(p[0]-x0)*PXM,(p[1]-y0)*PXM]);
+  ctx.lineJoin="round";
+  for(const [w,c] of [[7,"rgba(24,36,27,.85)"],[3.5,live?"#ffd23f":"#ffffff"]]){
+    ctx.strokeStyle=c;ctx.lineWidth=w;ctx.setLineDash(live?[14,8]:[]);ctx.beginPath();
+    P.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1])); if(!live)ctx.closePath(); ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  if(live)P.forEach(p=>{ctx.fillStyle="#ffd23f";ctx.strokeStyle="#18241b";ctx.lineWidth=2;ctx.beginPath();ctx.arc(p[0],p[1],7,0,7);ctx.fill();ctx.stroke();});
+}
+function updateCompare(pad){
+  const o=outlineOf(current.id), el=$("cmp");
+  if(!o){el.hidden=true;return}
+  let xs=o.map(p=>p[0]), ys=o.map(p=>p[1]), x0=Math.floor(Math.min(...xs)), x1=Math.ceil(Math.max(...xs)), y0=Math.floor(Math.min(...ys)), y1=Math.ceil(Math.max(...ys));
+  // nearest LiDAR pad, if this point isn't one
+  let pd=pad; if(!pd){let bd=1e9; C.pads.forEach(q=>{const d=Math.hypot(q.x-current.x,q.y-current.y); if(d<bd){bd=d;pd=q}}); if(bd>25)pd=null;}
+  if(pd){x0=Math.min(x0,pd.mx);y0=Math.min(y0,pd.my);x1=Math.max(x1,pd.mx+pd.mw);y1=Math.max(y1,pd.my+pd.mh);}
+  let a=0,b=0,both=0;
+  for(let y=y0;y<y1;y++)for(let x=x0;x<x1;x++){const io=pip(o,x+.5,y+.5), ip=pd?inMask(pd,x+.5,y+.5)&&!(pd.m==null):false; if(io)a++; if(ip)b++; if(io&&ip)both++;}
+  el.hidden=false;
+  if(!pd||!b){el.textContent=`Your outline covers ${a} m². The LiDAR found no flat raised pad here, so the slopes inside your outline come straight from the terrain model.`;return}
+  const iou=Math.round(both/(a+b-both)*100), cov=Math.round(both/a*100);
+  const verdict=cov>=85?"It lines up with the LiDAR":cov>=60?"It partly lines up with the LiDAR":"It doesn't line up well with the LiDAR, so check you've outlined the right spot";
+  el.textContent=`${verdict}: ${cov}% of your outline sits on the flat raised pad. Your outline covers ${a} m² and the pad, including its edges, covers ${b} m² (${iou}% overlap). Stats and shading now use your outline.`;
+}
+
+// ---------- putt reading ----------
+$("gcanvas").addEventListener("click",e=>{
+  const r=e.currentTarget.getBoundingClientRect(), {x0,y0}=view();
+  const gx=x0+(e.clientX-r.left)/r.width*WIN, gy=y0+(e.clientY-r.top)/r.height*WIN;
+  if(drawing){drawing.push([+gx.toFixed(2),+gy.toFixed(2)]); renderDetail(); return}
+  if(putt.length>=2)putt=[];
+  putt.push([gx,gy]); renderDetail();
+});
+function drawPutt(ctx,x0,y0){
+  if(!putt.length)return;
+  const P=putt.map(p=>[(p[0]-x0)*PXM,(p[1]-y0)*PXM]);
+  if(P.length===2){ctx.strokeStyle="#fff";ctx.lineWidth=4;ctx.setLineDash([12,8]);ctx.beginPath();ctx.moveTo(P[0][0],P[0][1]);ctx.lineTo(P[1][0],P[1][1]);ctx.stroke();ctx.setLineDash([]);}
+  ctx.fillStyle="#fff";ctx.strokeStyle="#18241b";ctx.lineWidth=3;ctx.beginPath();ctx.arc(P[0][0],P[0][1],9,0,7);ctx.fill();ctx.stroke();
+  if(P[1]){const [hx,hy]=P[1];ctx.fillStyle="#18241b";ctx.beginPath();ctx.arc(hx,hy,8,0,7);ctx.fill();
+    ctx.strokeStyle="#18241b";ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(hx,hy);ctx.lineTo(hx,hy-46);ctx.stroke();
+    ctx.fillStyle="#e3b21c";ctx.beginPath();ctx.moveTo(hx,hy-46);ctx.lineTo(hx+26,hy-38);ctx.lineTo(hx,hy-30);ctx.closePath();ctx.fill();}
+}
+function updatePuttText(){
+  const el=$("putt");
+  if(putt.length===0){el.textContent="Tap your ball, then the hole, to read the putt.";return}
+  if(putt.length===1){el.textContent="Now tap the hole.";return}
+  const [b,h]=putt, dx=h[0]-b[0], dy=h[1]-b[1], dist=Math.hypot(dx,dy);
+  if(dist<.5){el.textContent="Those points are too close together. Tap your ball again.";putt=[];return}
+  const dz=(bil(Z,h[0],h[1])-bil(Z,b[0],b[1]))*100, ux=dx/dist, uy=dy/dist, rx=-uy, ry=ux;
+  let side=0,k=0; for(let t=0;t<=1;t+=.05){const x=b[0]+dx*t,y=b[1]+dy*t; side+=bil(GX,x,y)*rx+bil(GY,x,y)*ry; k++;}
+  side=side/k*100;
+  const grade=dz/dist;
+  const ud=Math.abs(dz)<1.5?"about level":dz>0?`<b>${dz.toFixed(0)} cm</b> uphill`:`<b>${(-dz).toFixed(0)} cm</b> downhill`;
+  const br=Math.abs(side)<.4?"Little or no break.":side>0?`Right side is higher (<b>${side.toFixed(1)}%</b> side slope), so it breaks <b>left</b>.`:`Left side is higher (<b>${(-side).toFixed(1)}%</b> side slope), so it breaks <b>right</b>.`;
+  el.innerHTML=`<b>${dist.toFixed(1)} m</b> (${(dist*1.0936).toFixed(0)} yd), ${ud}${Math.abs(dz)>=1.5?` (${grade.toFixed(1)}%)`:""}. ${br} <span class="note">Tap again to start a new putt.</span>`;
+}
+
+// ---------- labelling ----------
+function writeLabel(id,val){
+  labels[id]=val;
+  safeLS(()=>localStorage.setItem("tpg-labels",JSON.stringify(labels)));
+  if(db)return db.collection("greens").doc(id).set(val).catch(()=>{});
+  return Promise.resolve();
+}
+function save(id,val){
+  if(labels[id]&&labels[id].outline&&!("outline" in val))val=Object.assign({},val,{outline:labels[id].outline});
+  if(labels[id]&&labels[id].play&&!("play" in val))val=Object.assign({},val,{play:labels[id].play});
+  labels[id]=val;
+  safeLS(()=>localStorage.setItem("tpg-labels",JSON.stringify(labels)));
+  $("saveState").textContent="Saving…";
+  const done=()=>{$("saveState").textContent="Saved"; setTimeout(()=>{$("saveState").textContent=""},1800)};
+  if(db){db.collection("greens").doc(id).set(val).then(done).catch(()=>{$("saveState").textContent="Saved on this device only"});}
+  else done();
+  drawMap(); buildHoles(); renderDetail();
+}
+document.querySelectorAll("#kindSeg button").forEach(b=>b.onclick=()=>{
+  const l=labelOf(current.id); const k=b.dataset.k;
+  save(current.id,{kind:k,hole:k==="green"?(l.hole||null):null,x:+current.x.toFixed(1),y:+current.y.toFixed(1)});
+});
+$("holeSel").onchange=e=>{
+  const h=e.target.value?+e.target.value:null;
+  // a hole number belongs to one green: clear it from any other
+  Object.keys(labels).forEach(id=>{ if(id!==current.id&&labels[id].hole===h&&h){ save(id,Object.assign({},labels[id],{hole:null})); } });
+  save(current.id,{kind:"green",hole:h,x:+current.x.toFixed(1),y:+current.y.toFixed(1)});
+};
+
+// ---------- Google satellite (own website only) ----------
+let satKey=null, satSession=null, satCopy="";
+const tileCache=new Map();
+function satActive(){return !HOSTED&&$("satOn").checked&&!!satSession}
+function satInit(){
+  satKey=safeLS(()=>localStorage.getItem("tpg-gkey"));
+  const on=safeLS(()=>localStorage.getItem("tpg-sat"))==="1"; $("satOn").checked=on&&!!satKey;
+  if(!satKey){$("satNote").textContent="Add your Google key to turn on the satellite layer.";}
+  else startSession();
+}
+async function startSession(){
+  satSession=null;
+  const cached=safeLS(()=>JSON.parse(localStorage.getItem("tpg-gsess")||"null"));
+  if(cached&&cached.key===satKey&&cached.expiry*1000>Date.now()+864e5){satSession=cached.session;afterSession();return}
+  $("satNote").textContent="Connecting to Google…";
+  try{
+    const r=await fetch("https://tile.googleapis.com/v1/createSession?key="+encodeURIComponent(satKey),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mapType:"satellite",language:"en-GB",region:"GB"})});
+    const j=await r.json();
+    if(!r.ok||!j.session)throw new Error((j.error&&j.error.message)||("HTTP "+r.status));
+    satSession=j.session; safeLS(()=>localStorage.setItem("tpg-gsess",JSON.stringify({key:satKey,session:j.session,expiry:+j.expiry})));
+    afterSession();
+  }catch(e){$("satNote").textContent="Google refused the key: "+String(e.message||e).slice(0,140)+". Check the Map Tiles API is enabled and this site is allowed on the key.";$("satOn").checked=false;}
+}
+function afterSession(){$("satNote").textContent="";fetchCopyright();drawMap();if(current)renderDetail();}
+async function fetchCopyright(){
+  try{const [w,n]=toLL(0,0),[e,s]=toLL(W,H);
+    const r=await fetch(`https://tile.googleapis.com/tile/v1/viewport?session=${satSession}&key=${encodeURIComponent(satKey)}&zoom=18&north=${n}&south=${s}&east=${e}&west=${w}`);
+    const j=await r.json(); satCopy=j.copyright||"";}catch(e){satCopy="";}
+  showAttrib();
+}
+function showAttrib(){const t=satActive()?`Imagery © Google${satCopy?" · "+satCopy:""}. Moved 1.5 m south to line up with the LiDAR.`:"";
+  ["mapAttrib","gAttrib"].forEach(id=>{$(id).textContent=t;$(id).hidden=!t;});}
+function merc(lon,lat,z){const n=256*Math.pow(2,z),s=Math.sin(lat*Math.PI/180);return[(lon+180)/360*n,(.5-Math.log((1+s)/(1-s))/(4*Math.PI))*n]}
+function tileImg(z,x,y,onload){
+  const k=z+"/"+x+"/"+y; let im=tileCache.get(k);
+  if(!im){im=new Image();im.crossOrigin="anonymous";im.src=`https://tile.googleapis.com/v1/2dtiles/${z}/${x}/${y}?session=${satSession}&key=${encodeURIComponent(satKey)}`;tileCache.set(k,im);}
+  if(!im.complete){im.addEventListener("load",onload,{once:true});return null}
+  return im.naturalWidth?im:null;
+}
+let satRedraw=0;
+function drawSat(which){
+  const cv=which==="map"?$("mapImg"):$("gimg"), src=which==="map"?$("map"):$("gcanvas");
+  if(!satActive()){cv.hidden=true;showAttrib();return} cv.hidden=false; showAttrib();
+  let gx0,gy0,gw,gh,z;
+  if(which==="map"){gx0=0;gy0=0;gw=W;gh=H;z=18;cv.width=src.width;cv.height=src.height;cv.style.width=src.style.width;}
+  else{const v=view();gx0=v.x0;gy0=v.y0;gw=WIN;gh=WIN;z=20;cv.width=src.width;cv.height=src.height;}
+  const ctx=cv.getContext("2d"); ctx.setTransform(1,0,0,1,0,0); ctx.fillStyle="#5d6b5a"; ctx.fillRect(0,0,cv.width,cv.height);
+  const sh=C.gshift||[0,0];
+  // grid (LiDAR frame) -> Google frame = grid - shift -> lon/lat -> mercator px; affine from 3 points
+  const P=(x,y)=>{const ll=toLL(x-sh[0],y-sh[1]);return merc(ll[0],ll[1],z)};
+  const o=P(gx0,gy0),ax=P(gx0+gw,gy0),ay=P(gx0,gy0+gh);
+  // canvas px per grid m
+  const kx=cv.width/gw, ky=cv.height/gh;
+  // merc = o + A*(canvas px): A columns
+  const a11=(ax[0]-o[0])/cv.width,a21=(ax[1]-o[1])/cv.width,a12=(ay[0]-o[0])/cv.height,a22=(ay[1]-o[1])/cv.height;
+  const det=a11*a22-a12*a21, i11=a22/det,i12=-a12/det,i21=-a21/det,i22=a11/det; // canvas = Ainv*(merc-o)
+  const corners=[o,ax,ay,P(gx0+gw,gy0+gh)], mx0=Math.min(...corners.map(c=>c[0])),mx1=Math.max(...corners.map(c=>c[0])),my0=Math.min(...corners.map(c=>c[1])),my1=Math.max(...corners.map(c=>c[1]));
+  const redraw=()=>{clearTimeout(satRedraw);satRedraw=setTimeout(()=>{if(which==="map")drawSat("map");else if(current)drawSat("g")},120)};
+  for(let ty=Math.floor(my0/256);ty<=Math.floor(my1/256);ty++)for(let tx=Math.floor(mx0/256);tx<=Math.floor(mx1/256);tx++){
+    const im=tileImg(z,tx,ty,redraw); if(!im)continue;
+    // tile px (u,v) -> merc (tx*256+u*256/iw, ...) -> canvas
+    const s=256/im.naturalWidth, ex=tx*256-o[0], ey=ty*256-o[1];
+    ctx.setTransform(i11*s,i21*s,i12*s,i22*s,i11*ex+i12*ey,i21*ex+i22*ey);
+    ctx.drawImage(im,0,0); 
+  }
+  ctx.setTransform(1,0,0,1,0,0);
+}
+$("satOn").onchange=()=>{ if($("satOn").checked&&!satKey){$("satOn").checked=false;$("keybox").hidden=false;return}
+  safeLS(()=>localStorage.setItem("tpg-sat",$("satOn").checked?"1":"0")); if($("satOn").checked&&!satSession)startSession(); drawMap(); if(current)renderDetail(); };
+$("satAlpha").oninput=()=>{drawMap(); if(current)renderDetail();};
+$("keyBtn").onclick=()=>{$("keybox").hidden=!$("keybox").hidden; $("keyIn").value=satKey||"";};
+$("keySave").onclick=()=>{const k=$("keyIn").value.trim(); if(!k)return; satKey=k; safeLS(()=>{localStorage.setItem("tpg-gkey",k);localStorage.removeItem("tpg-gsess")}); $("keybox").hidden=true; $("satOn").checked=true; safeLS(()=>localStorage.setItem("tpg-sat","1")); startSession();};
+$("keyClear").onclick=()=>{satKey=null;satSession=null;safeLS(()=>{localStorage.removeItem("tpg-gkey");localStorage.removeItem("tpg-gsess")});$("keyIn").value="";$("satOn").checked=false;$("satNote").textContent="Key forgotten.";drawMap();if(current)renderDetail();};
+// KML export of greens (back in Google's frame so it lines up in My Maps)
+$("exportKml").onclick=()=>{
+  const sh=C.gshift||[0,0], ll=(p)=>{const q=toLL(p[0]-sh[0],p[1]-sh[1]);return q[0].toFixed(7)+","+q[1].toFixed(7)+",0"};
+  const esc=t=>String(t).replace(/[<&>]/g,c=>({"<":"&lt;","&":"&amp;",">":"&gt;"}[c]));
+  let g="",l="";
+  Object.keys(labels).map(k=>[k,labels[k]]).filter(([k,v])=>v.kind==="green"&&v.hole).sort((a,b)=>a[1].hole-b[1].hole).forEach(([k,v])=>{
+    const o=outlineOf(k); if(o)g+=`<Placemark><name>${esc("Nr. "+v.hole)}</name><Polygon><outerBoundaryIs><LinearRing><coordinates>${o.concat([o[0]]).map(ll).join(" ")}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>`;
+    else g+=`<Placemark><name>${esc("Nr. "+v.hole)}</name><Point><coordinates>${ll([v.x,v.y])}</coordinates></Point></Placemark>`;
+    if(Array.isArray(v.play)&&v.play.length>=2)l+=`<Placemark><name>${esc("LoP "+v.hole)}</name><LineString><coordinates>${v.play.map(ll).join(" ")}</coordinates></LineString></Placemark>`;
+  });
+  const kml=`<?xml version="1.0" encoding="UTF-8"?><kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Tredegar Park greens</name><Folder><name>Greens</name>${g}</Folder><Folder><name>Direction of play</name>${l}</Folder></Document></kml>`;
+  const a=document.createElement("a"); a.href=URL.createObjectURL(new Blob([kml],{type:"application/vnd.google-earth.kml+xml"})); a.download="Tredegar Park greens.kml"; document.body.appendChild(a); a.click(); a.remove();
+};
+
+// ---------- green book download ----------
+$("bookBtn").onclick=async()=>{
+  const note=$("bookNote");
+  if(!HOSTED){const a=document.createElement("a");a.href="greenbook.pdf";a.download="Tredegar Park green book.pdf";document.body.appendChild(a);a.click();a.remove();return}
+  note.textContent="Preparing…";
+  try{
+    const dl=window.claude&&window.claude.use?await window.claude.use("downloads"):null;
+    if(!dl){note.textContent="Downloads aren’t available in this view. Open the page in claude.ai to save the PDF.";return}
+    const buf=await (await fetch("greenbook.pdf")).arrayBuffer();
+    await dl.save({filename:"Tredegar Park green book.pdf",data:buf});
+    note.textContent="Saved.";
+  }catch(e){
+    const c=e&&e.code;
+    note.textContent=c==="declined"?"Download cancelled.":c==="rate_limited"?"A download is already waiting for you to confirm.":"The PDF couldn’t be saved here. Try again in claude.ai.";
+  }
+};
+
+// ---------- outline drawing ----------
+function updateDrawUi(){
+  const has=!!outlineOf(current.id);
+  $("drawBtn").hidden=!!drawing; $("drawTools").hidden=!drawing; $("drawClear").hidden=!!drawing||!has;
+  $("drawBtn").textContent=has?"Redraw outline":"Draw green outline";
+  $("drawHint").textContent=drawing?(drawing.length<3?`Tap round the edge of the green (${drawing.length} point${drawing.length===1?"":"s"} so far, need 3 or more).`:`${drawing.length} points. Save when you're back at the start.`):"";
+  $("drawDone").disabled=!drawing||drawing.length<3;
+}
+$("drawBtn").onclick=()=>{drawing=[];putt=[];renderDetail()};
+$("drawUndo").onclick=()=>{if(drawing){drawing.pop();renderDetail()}};
+$("drawCancel").onclick=()=>{drawing=null;renderDetail()};
+$("drawDone").onclick=()=>{
+  if(!drawing||drawing.length<3)return;
+  const o=drawing; drawing=null; const l=labels[current.id]||{};
+  save(current.id,{kind:l.kind||"green",hole:l.hole||null,x:+current.x.toFixed(1),y:+current.y.toFixed(1),outline:o});
+};
+$("drawClear").onclick=()=>{const l=Object.assign({},labels[current.id]); delete l.outline; labels[current.id]=l; save(current.id,Object.assign(l,{outline:null}));};
+
+// ---------- Google My Maps pins ----------
+function setPins(items){
+  pins=items.filter(p=>isFinite(p.lon)&&isFinite(p.lat)).map(p=>{const sh=C.gshift||[0,0], g=(lo,la)=>{const r=toXY(lo,la);return[r[0]+sh[0],r[1]+sh[1]]};
+    const [x,y]=g(p.lon,p.lat);
+    const poly=Array.isArray(p.poly)&&p.poly.length>=3?p.poly.map(q=>g(q[0],q[1])):null;
+    const line=Array.isArray(p.line)&&p.line.length>=2?p.line.map(q=>g(q[0],q[1])):null;
+    return{name:String(p.name||"").slice(0,60),lon:p.lon,lat:p.lat,x,y,poly,line,rawPoly:p.poly||null,rawLine:p.line||null}});
+  $("pinToggle").hidden=!pins.length; $("applyPins").hidden=!pins.some(p=>holeFromName(p.name));
+  if(pins.length&&!$("pinNote").dataset.locked)$("pinNote").textContent=`${pins.length} pin${pins.length>1?"s":""} from your Google map on the course map.`;
+}
+function holeFromName(n){const m=/(?:^|\D)(1[0-8]|[1-9])(?!\d)/.exec(n||"");return m?+m[1]:null}
+function parseKml(text){
+  const doc=new DOMParser().parseFromString(text,"application/xml");
+  if(doc.getElementsByTagName("parsererror").length)throw new Error("bad");
+  const out=[];
+  Array.from(doc.getElementsByTagName("Placemark")).forEach(pm=>{
+    const nm=pm.getElementsByTagName("name")[0], co=pm.getElementsByTagName("coordinates")[0]; if(!co)return;
+    const pts=co.textContent.trim().split(/\s+/).map(s=>s.split(",").map(Number)).filter(p=>p.length>=2&&isFinite(p[0])&&isFinite(p[1]));
+    if(!pts.length)return;
+    const lon=pts.reduce((a,p)=>a+p[0],0)/pts.length, lat=pts.reduce((a,p)=>a+p[1],0)/pts.length, [x,y]=toXY(lon,lat);
+    if(x<-100||y<-100||x>W+100||y>H+100)return;
+    const item={name:nm?nm.textContent.trim():"",lon:+lon.toFixed(7),lat:+lat.toFixed(7)};
+    if(pm.getElementsByTagName("LineString").length){item.line=pts.map(p=>[+p[0].toFixed(7),+p[1].toFixed(7)]).slice(0,200);out.push(item);return}
+    if(pts.length>=3){let q=pts.map(p=>[+p[0].toFixed(7),+p[1].toFixed(7)]); if(q.length>3&&q[0][0]===q[q.length-1][0]&&q[0][1]===q[q.length-1][1])q.pop(); if(q.length>=3)item.poly=q.slice(0,400);}
+    out.push(item);
+  });
+  return out;
+}
+$("kmlFile").addEventListener("change",e=>{
+  const f=e.target.files&&e.target.files[0]; if(!f)return;
+  if(/\.kmz$/i.test(f.name)){$("pinNote").textContent="That’s a KMZ file. In Google My Maps, tick “Export to a .KML file” and export again.";return}
+  const r=new FileReader();
+  r.onload=()=>{
+    let items; try{items=parseKml(String(r.result))}catch(err){$("pinNote").textContent="That file couldn’t be read as KML. Export it from Google My Maps as a .KML file and try again.";return}
+    if(!items.length){$("pinNote").textContent="No pins in that file are on the course. Check the pins sit on Tredegar Park Golf Club.";return}
+    $("pinNote").dataset.locked=""; delete $("pinNote").dataset.locked;
+    setPins(items); drawMap();
+    safeLS(()=>localStorage.setItem("tpg-pins",JSON.stringify(items)));
+    if(db)db.collection("pins").doc("all").set({items,importedAt:new Date().toISOString()}).catch(()=>{});
+  };
+  r.readAsText(f); e.target.value="";
+});
+function distToPad(pd,x,y){
+  if(!pd.m)return Math.hypot(pd.x-x,pd.y-y);
+  let best=1e9; for(let j=0;j<pd.mh;j++)for(let i=0;i<pd.mw;i++)if(pd.m[j*pd.mw+i]){const d=Math.hypot(pd.mx+i+.5-x,pd.my+j+.5-y);if(d<best)best=d;}
+  return best;
+}
+$("applyPins").onclick=()=>{
+  let matched=0; const added=[];
+  const used={};
+  pins.forEach(p=>{
+    if(p.line)return;
+    const hole=holeFromName(p.name); if(!hole)return;
+    let best=null,bd=1e9; C.pads.forEach(pd=>{const d=distToPad(pd,p.x,p.y);if(d<bd){bd=d;best=pd}});
+    if(p.poly&&best&&bd>6){ // shape: match a pad whose centre is inside it
+      const hit=C.pads.find(pd=>pip(p.poly,pd.x,pd.y)); if(hit){best=hit;bd=0}}
+    let id,x,y;
+    if(best&&bd<=6){id=best.id;x=best.x;y=best.y;matched++}
+    else{id="u"+Math.round(p.x)+"_"+Math.round(p.y);x=p.x;y=p.y;added.push(hole)}
+    used[hole]=id;
+    const v={kind:"green",hole,x:+x.toFixed(1),y:+y.toFixed(1)};
+    if(p.poly)v.outline=p.poly.map(q=>[+q[0].toFixed(2),+q[1].toFixed(2)]); else if(labels[id]&&labels[id].outline)v.outline=labels[id].outline;
+    if(labels[id]&&labels[id].play)v.play=labels[id].play;
+    writeLabel(id,v);
+  });
+  Object.keys(labels).forEach(k=>{const h=labels[k].hole; if(h&&used[h]&&used[h]!==k)writeLabel(k,Object.assign({},labels[k],{hole:null}))});
+  let lines=0; const noGreen=[];
+  pins.forEach(p=>{ if(!p.line)return;
+    let L=p.line.slice(); while(L.length>2&&Math.hypot(L[L.length-1][0]-L[L.length-2][0],L[L.length-1][1]-L[L.length-2][1])<5)L.pop(); // stray end points
+    const end=L[L.length-1];
+    // the green the line ends on decides the hole, whatever the line is called
+    let id=null,bd=30;
+    Object.keys(labels).forEach(k=>{const l=labels[k]; if(l.kind!=="green"||!l.hole)return; const o=outlineOf(k);
+      const d=o&&pip(o,end[0],end[1])?0:Math.hypot(l.x-end[0],l.y-end[1]); if(d<bd){bd=d;id=k}});
+    if(!id){const hole=holeFromName(p.name); id=hole?Object.keys(labels).find(k=>labels[k].kind==="green"&&labels[k].hole===hole):null; if(!id){if(hole)noGreen.push(hole);return}}
+    writeLabel(id,Object.assign({},labels[id],{play:L.map(q=>[+q[0].toFixed(2),+q[1].toFixed(2)])})); lines++; });
+  let msg=`Set ${matched+added.length} hole${matched+added.length===1?"":"s"} from your pins. ${matched} matched a green found in the LiDAR.`;
+  if(added.length)msg+=` No flat raised pad was found under the pin for hole${added.length>1?"s":""} ${added.sort((a,b)=>a-b).join(", ")}, so a close-up was added at the pin. Worth a look.`;
+  if(lines)msg+=` Added ${lines} line${lines>1?"s":""} of play.`;
+  if(noGreen.length)msg+=` Line of play for hole${noGreen.length>1?"s":""} ${noGreen.join(", ")} has no green with that number yet.`;
+  $("pinNote").textContent=msg; $("pinNote").dataset.locked="1";
+  drawMap(); buildHoles(); if(current)renderDetail();
+};
+})();
+</script>
